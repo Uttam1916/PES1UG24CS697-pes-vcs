@@ -94,29 +94,40 @@ int object_exists(const ObjectID *id) {
 //
 // Returns 0 on success, -1 on error.
 int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out) {
-    (void)data; (void)id_out;
+    (void)id_out;
 
     char header[64];
     const char *type_str;
 
-    // Convert enum to string
     if (type == OBJ_BLOB) type_str = "blob";
     else if (type == OBJ_TREE) type_str = "tree";
     else if (type == OBJ_COMMIT) type_str = "commit";
     else return -1;
 
-    // Build header: "type size"
     int header_len = snprintf(header, sizeof(header), "%s %zu", type_str, len);
-
-    // Add null terminator explicitly after header
     header[header_len] = '\0';
 
-    // Debug print (optional but useful now)
-    printf("Header: %s\\0 (len=%d)\\n", header, header_len);
+    size_t total_len = header_len + 1 + len;
+
+    char *buffer = malloc(total_len);
+    if (!buffer) return -1;
+
+    // Copy header
+    memcpy(buffer, header, header_len);
+
+    // Add null separator
+    buffer[header_len] = '\0';
+
+    // Copy data after \0
+    memcpy(buffer + header_len + 1, data, len);
+
+    // Debug check
+    printf("Built object: header_len=%d, total_len=%zu\n", header_len, total_len);
+
+    free(buffer);
 
     return 0;
 }
-
 // Read an object from the store.
 //
 // Steps:
