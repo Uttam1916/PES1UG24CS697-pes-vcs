@@ -97,35 +97,45 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     char header[64];
     const char *type_str;
 
+    // Convert enum to string
     if (type == OBJ_BLOB) type_str = "blob";
     else if (type == OBJ_TREE) type_str = "tree";
     else if (type == OBJ_COMMIT) type_str = "commit";
     else return -1;
 
+    // Build header: "type size"
     int header_len = snprintf(header, sizeof(header), "%s %zu", type_str, len);
-    header[header_len] = '\0';
+    if (header_len < 0) return -1;
 
+    // Total size = header + '\0' + data
     size_t total_len = header_len + 1 + len;
 
     char *buffer = malloc(total_len);
     if (!buffer) return -1;
 
+    // Copy header
     memcpy(buffer, header, header_len);
+
+    // Add null separator
     buffer[header_len] = '\0';
+
+    // Copy data
     memcpy(buffer + header_len + 1, data, len);
 
-    // 🔥 NEW PART: HASHING
-
+    // Compute hash of full object
     ObjectID id;
     compute_hash(buffer, total_len, &id);
 
-    // convert to hex for debug
-    char hex[HASH_HEX_SIZE + 1];
-    hash_to_hex(&id, hex);
+    // Deduplication check
+    if (object_exists(&id)) {
+        if (id_out) {
+            *id_out = id;
+        }
+        free(buffer);
+        return 0;
+    }
 
-    printf("Computed hash: %s\n", hex);
-
-    // store result
+    // Store hash (even though not written yet)
     if (id_out) {
         *id_out = id;
     }
