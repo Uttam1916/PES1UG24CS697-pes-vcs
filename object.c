@@ -128,6 +128,8 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
 
     char dir[512];
     strncpy(dir, path, sizeof(dir));
+    dir[sizeof(dir) - 1] = '\0';
+
     char *slash = strrchr(dir, '/');
     if (!slash) {
         free(buffer);
