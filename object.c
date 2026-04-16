@@ -175,7 +175,7 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     }
 
     // fsync directory
-    int dir_fd = open(dir, O_DIRECTORY);
+    int dir_fd = open(dir, O_RDONLY);
     if (dir_fd >= 0) {
         fsync(dir_fd);
         close(dir_fd);
