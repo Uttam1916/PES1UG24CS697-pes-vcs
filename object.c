@@ -94,8 +94,6 @@ int object_exists(const ObjectID *id) {
 //
 // Returns 0 on success, -1 on error.
 int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out) {
-    (void)id_out;
-
     char header[64];
     const char *type_str;
 
@@ -112,22 +110,30 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     char *buffer = malloc(total_len);
     if (!buffer) return -1;
 
-    // Copy header
     memcpy(buffer, header, header_len);
-
-    // Add null separator
     buffer[header_len] = '\0';
-
-    // Copy data after \0
     memcpy(buffer + header_len + 1, data, len);
 
-    // Debug check
-    printf("Built object: header_len=%d, total_len=%zu\n", header_len, total_len);
+    // 🔥 NEW PART: HASHING
+
+    ObjectID id;
+    compute_hash(buffer, total_len, &id);
+
+    // convert to hex for debug
+    char hex[HASH_HEX_SIZE + 1];
+    hash_to_hex(&id, hex);
+
+    printf("Computed hash: %s\n", hex);
+
+    // store result
+    if (id_out) {
+        *id_out = id;
+    }
 
     free(buffer);
-
     return 0;
 }
+
 // Read an object from the store.
 //
 // Steps:
