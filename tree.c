@@ -15,6 +15,7 @@
 #include <string.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include "index.h"
 
 // ─── Mode Constants ─────────────────────────────────────────────────────────
 
@@ -140,5 +141,21 @@ int tree_from_index(ObjectID *id_out) {
         return -1;
     }
 
-    return -1; // placeholder
+    Tree tree;
+    tree.count = 0;
+
+    for (int i = 0; i < index.count; i++) {
+        TreeEntry *entry = &tree.entries[tree.count++];
+
+        entry->mode = index.entries[i].mode;
+        entry->hash = index.entries[i].hash;
+
+        const char *name = strrchr(index.entries[i].path, '/');
+        if (name) name++; else name = index.entries[i].path;
+
+        strncpy(entry->name, name, sizeof(entry->name));
+        entry->name[sizeof(entry->name) - 1] = '\0';
+    }
+
+    return -1;
 }
