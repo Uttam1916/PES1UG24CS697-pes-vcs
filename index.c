@@ -24,6 +24,9 @@
 #include <unistd.h>
 #include <dirent.h>
 
+// Forward declarations (implemented in object.c)
+int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out);
+
 // ─── PROVIDED ────────────────────────────────────────────────────────────────
 
 // Find an index entry by path (linear scan)
@@ -147,11 +150,12 @@ int index_load(Index *index) {
         IndexEntry *e = &index->entries[index->count];
 
         char hash_hex[65];
+        unsigned long long mtime;
 
-        int ret = fscanf(f, "%o %64s %ld %u %255s\n",
+        int ret = fscanf(f, "%o %64s %llu %u %255s\n",
                          &e->mode,
                          hash_hex,
-                         &e->mtime_sec,
+                         &mtime,
                          &e->size,
                          e->path);
 
@@ -160,6 +164,8 @@ int index_load(Index *index) {
             fclose(f);
             return -1;
         }
+
+        e->mtime_sec = (uint64_t)mtime;
 
         if (hex_to_hash(hash_hex, &e->hash) != 0) {
             fclose(f);
@@ -202,10 +208,10 @@ int index_save(const Index *index) {
         char hash_hex[65];
         hash_to_hex(&e->hash, hash_hex);
 
-        fprintf(f, "%o %s %ld %u %s\n",
+        fprintf(f, "%o %s %llu %u %s\n",
                 e->mode,
                 hash_hex,
-                e->mtime_sec,
+                (unsigned long long)e->mtime_sec,
                 e->size,
                 e->path);
     }
@@ -245,8 +251,8 @@ int index_add(Index *index, const char *path) {
     }
 
     if (fread(buffer, 1, size, f) != size) {
-    free(buffer);
-    return -1;
+        free(buffer);
+        return -1;
     }
     fclose(f);
 
