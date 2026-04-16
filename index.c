@@ -14,7 +14,7 @@
 //
 // PROVIDED functions: index_find, index_remove, index_status
 // TODO functions:     index_load, index_save, index_add
-
+#include "pes.h"
 #include "index.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -148,7 +148,7 @@ int index_load(Index *index) {
 
         char hash_hex[65];
 
-        int ret = fscanf(f, "%o %64s %ld %ld %255s\n",
+        int ret = fscanf(f, "%o %64s %ld %u %255s\n",
                          &e->mode,
                          hash_hex,
                          &e->mtime_sec,
@@ -161,7 +161,7 @@ int index_load(Index *index) {
             return -1;
         }
 
-        if (hex_to_hash(hash_hex, &e->id) != 0) {
+        if (hex_to_hash(hash_hex, &e->hash) != 0) {
             fclose(f);
             return -1;
         }
@@ -200,9 +200,9 @@ int index_save(const Index *index) {
         const IndexEntry *e = &sorted.entries[i];
 
         char hash_hex[65];
-        hash_to_hex(&e->id, hash_hex);
+        hash_to_hex(&e->hash, hash_hex);
 
-        fprintf(f, "%o %s %ld %ld %s\n",
+        fprintf(f, "%o %s %ld %u %s\n",
                 e->mode,
                 hash_hex,
                 e->mtime_sec,
@@ -244,7 +244,10 @@ int index_add(Index *index, const char *path) {
         return -1;
     }
 
-    fread(buffer, 1, size, f);
+    if (fread(buffer, 1, size, f) != size) {
+    free(buffer);
+    return -1;
+    }
     fclose(f);
 
     ObjectID id;
@@ -255,6 +258,22 @@ int index_add(Index *index, const char *path) {
 
     free(buffer);
 
-    // TEMP: stop here (next commit will update index)
-    return 0;
+    struct stat st;
+    if (stat(path, &st) != 0) return -1;
+
+    IndexEntry *e = index_find(index, path);
+
+    if (!e) {
+        if (index->count >= MAX_INDEX_ENTRIES) return -1;
+        e = &index->entries[index->count++];
+    }
+
+    e->mode = (st.st_mode & S_IXUSR) ? 0100755 : 0100644;
+    e->mtime_sec = st.st_mtime;
+    e->size = st.st_size;
+    e->hash = id;
+    strncpy(e->path, path, sizeof(e->path));
+    e->path[sizeof(e->path) - 1] = '\0';
+
+    return index_save(index);
 }
