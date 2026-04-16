@@ -144,17 +144,52 @@ int tree_from_index(ObjectID *id_out) {
     Tree tree;
     tree.count = 0;
 
+    // Track simple directories
+    char seen_dirs[128][256];
+    int dir_count = 0;
+
     for (int i = 0; i < index.count; i++) {
-        TreeEntry *entry = &tree.entries[tree.count++];
+        char *path = index.entries[i].path;
+        char *slash = strchr(path, '/');
 
-        entry->mode = index.entries[i].mode;
-        entry->hash = index.entries[i].hash;
+        if (!slash) {
+            // regular file
+            TreeEntry *entry = &tree.entries[tree.count++];
+            entry->mode = index.entries[i].mode;
+            entry->hash = index.entries[i].hash;
 
-        const char *name = strrchr(index.entries[i].path, '/');
-        if (name) name++; else name = index.entries[i].path;
+            strncpy(entry->name, path, sizeof(entry->name));
+            entry->name[sizeof(entry->name) - 1] = '\0';
+        } else {
+            // directory case (only top-level for now)
+            size_t dir_len = slash - path;
 
-        strncpy(entry->name, name, sizeof(entry->name));
-        entry->name[sizeof(entry->name) - 1] = '\0';
+            char dirname[256];
+            strncpy(dirname, path, dir_len);
+            dirname[dir_len] = '\0';
+
+            // check if already added
+            int found = 0;
+            for (int j = 0; j < dir_count; j++) {
+                if (strcmp(seen_dirs[j], dirname) == 0) {
+                    found = 1;
+                    break;
+                }
+            }
+
+            if (!found) {
+                strcpy(seen_dirs[dir_count++], dirname);
+
+                TreeEntry *entry = &tree.entries[tree.count++];
+                entry->mode = MODE_DIR;
+
+                strncpy(entry->name, dirname, sizeof(entry->name));
+                entry->name[sizeof(entry->name) - 1] = '\0';
+
+                // placeholder hash (will fix in next commit)
+                memset(&entry->hash, 0, sizeof(ObjectID));
+            }
+        }
     }
 
     void *data = NULL;
