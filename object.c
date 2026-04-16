@@ -97,48 +97,62 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
     char header[64];
     const char *type_str;
 
-    // Convert enum to string
     if (type == OBJ_BLOB) type_str = "blob";
     else if (type == OBJ_TREE) type_str = "tree";
     else if (type == OBJ_COMMIT) type_str = "commit";
     else return -1;
 
-    // Build header: "type size"
     int header_len = snprintf(header, sizeof(header), "%s %zu", type_str, len);
     if (header_len < 0) return -1;
 
-    // Total size = header + '\0' + data
     size_t total_len = header_len + 1 + len;
 
     char *buffer = malloc(total_len);
     if (!buffer) return -1;
 
-    // Copy header
     memcpy(buffer, header, header_len);
-
-    // Add null separator
     buffer[header_len] = '\0';
-
-    // Copy data
     memcpy(buffer + header_len + 1, data, len);
 
-    // Compute hash of full object
     ObjectID id;
     compute_hash(buffer, total_len, &id);
 
-    // Deduplication check
     if (object_exists(&id)) {
-        if (id_out) {
-            *id_out = id;
-        }
+        if (id_out) *id_out = id;
         free(buffer);
         return 0;
     }
 
-    // Store hash (even though not written yet)
-    if (id_out) {
-        *id_out = id;
+    char path[512];
+    object_path(&id, path, sizeof(path));
+
+    char dir[512];
+    strncpy(dir, path, sizeof(dir));
+    char *slash = strrchr(dir, '/');
+    if (!slash) {
+        free(buffer);
+        return -1;
     }
+    *slash = '\0';
+
+    mkdir(dir, 0755);
+
+    int fd = open(path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    if (fd < 0) {
+        free(buffer);
+        return -1;
+    }
+
+    ssize_t written = write(fd, buffer, total_len);
+    if (written != (ssize_t)total_len) {
+        close(fd);
+        free(buffer);
+        return -1;
+    }
+
+    close(fd);
+
+    if (id_out) *id_out = id;
 
     free(buffer);
     return 0;
