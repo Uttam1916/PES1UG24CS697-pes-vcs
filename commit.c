@@ -194,8 +194,59 @@ int head_update(const ObjectID *new_commit) {
 //
 // Returns 0 on success, -1 on error.
 int commit_create(const char *message, ObjectID *commit_id_out) {
-    // TODO: Implement commit creation
-    // (See Lab Appendix for logical steps)
-    (void)message; (void)commit_id_out;
-    return -1;
+    // Step 1: Build tree from index
+    ObjectID tree_id;
+    if (tree_from_index(&tree_id) != 0) {
+        fprintf(stderr, "error: failed to build tree from index\n");
+        return -1;
+    }
+
+    // Step 2: Read current HEAD as parent (may not exist for first commit)
+    ObjectID parent_id;
+    int has_parent = (head_read(&parent_id) == 0);
+
+    // Step 3: Get author string from environment
+    const char *author = pes_author();
+
+    // Step 4: Get current timestamp
+    uint64_t timestamp = (uint64_t)time(NULL);
+
+    // Step 5: Create Commit struct
+    Commit commit = {0};
+    commit.tree = tree_id;
+    if (has_parent) {
+        commit.parent = parent_id;
+        commit.has_parent = 1;
+    } else {
+        commit.has_parent = 0;
+    }
+    snprintf(commit.author, sizeof(commit.author), "%s", author);
+    commit.timestamp = timestamp;
+    snprintf(commit.message, sizeof(commit.message), "%s", message);
+
+    // Step 6: Serialize commit
+    void *serialized;
+    size_t serialized_len;
+    if (commit_serialize(&commit, &serialized, &serialized_len) != 0) {
+        fprintf(stderr, "error: failed to serialize commit\n");
+        return -1;
+    }
+
+    // Step 7: Write commit to object store
+    ObjectID new_commit_id;
+    int ret = object_write(OBJ_COMMIT, serialized, serialized_len, &new_commit_id);
+    free(serialized);
+    if (ret != 0) {
+        fprintf(stderr, "error: failed to write commit object\n");
+        return -1;
+    }
+
+    // Step 8: Update HEAD to point to new commit
+    if (head_update(&new_commit_id) != 0) {
+        fprintf(stderr, "error: failed to update HEAD\n");
+        return -1;
+    }
+
+    *commit_id_out = new_commit_id;
+    return 0;
 }
